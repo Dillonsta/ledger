@@ -1,0 +1,12 @@
+# 数据与本地测试产物
+testdata/
+data/
+*.db
+*.db-*
+token.key
+smoke-server.log
+
+# 编译产物
+ledger.exe
+ledger-arm64
+*.out

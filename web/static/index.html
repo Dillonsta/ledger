@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>记账本</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="month-nav">
+    <button id="prevMonth" class="ghost" aria-label="上个月">‹</button>
+    <span id="curMonth"></span>
+    <button id="nextMonth" class="ghost" aria-label="下个月">›</button>
+  </div>
+  <span class="app-name">记账本</span>
+</header>
+
+<main id="view"><div class="empty">加载中…</div></main>
+
+<button id="fab" class="fab" aria-label="记一笔">＋</button>
+
+<nav class="tabbar">
+  <button data-tab="list" class="on">明细</button>
+  <button data-tab="report">图表</button>
+  <button data-tab="budget">预算</button>
+  <button data-tab="settings">设置</button>
+</nav>
+
+<div id="modal" class="modal hidden"></div>
+<div id="toast" class="toast hidden"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

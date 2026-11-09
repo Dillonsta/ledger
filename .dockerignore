@@ -1,0 +1,6 @@
+data/
+testdata/
+*.db
+*.db-*
+token.key
+README.md

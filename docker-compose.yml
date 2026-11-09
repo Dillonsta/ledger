@@ -1,0 +1,15 @@
+services:
+  ledger:
+    build: .
+    platform: linux/arm64          # EdgePi E87N (MT7987A, Cortex-A53)
+    container_name: ledger
+    ports:
+      - "8300:8300"
+    volumes:
+      - ./data:/data               # SQLite 数据库 + token 密钥都在这里，备份这个目录即可
+    environment:
+      - LEDGER_ADMIN_USER=admin    # 仅首次启动创建用户时生效
+      - LEDGER_ADMIN_PASS=changeme123   # 部署前务必改掉
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    mem_limit: 64m                 # 实测远用不到，锁死防止失控
