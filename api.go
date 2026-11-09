@@ -84,13 +84,14 @@ func (h *hub) validateTxReq(uid int64, req *txReq) string {
 }
 
 type txItem struct {
-	ID       int64  `json:"id"`
-	Type     int    `json:"type"`
-	Amount   int64  `json:"amount"`
-	Date     string `json:"date"`
-	Note     string `json:"note"`
-	Category string `json:"category"`
-	Account  string `json:"account"`
+	ID         int64  `json:"id"`
+	Type       int    `json:"type"`
+	Amount     int64  `json:"amount"`
+	Date       string `json:"date"`
+	Note       string `json:"note"`
+	CategoryID int64  `json:"category_id"`
+	Category   string `json:"category"`
+	Account    string `json:"account"`
 }
 
 func (h *hub) handleListTx(w http.ResponseWriter, r *http.Request, uid int64) {
@@ -140,7 +141,7 @@ func (h *hub) handleListTx(w http.ResponseWriter, r *http.Request, uid int64) {
 		FROM tx t WHERE `+where, args...).Scan(&sumIn, &sumOut)
 
 	items := []txItem{}
-	rows, err := h.db.Query(`SELECT t.id, t.type, t.amount, t.tx_date, t.note, c.name, a.name
+	rows, err := h.db.Query(`SELECT t.id, t.type, t.amount, t.tx_date, t.note, t.category_id, c.name, a.name
 		FROM tx t
 		JOIN categories c ON c.id = t.category_id
 		JOIN accounts a ON a.id = t.account_id
@@ -154,7 +155,7 @@ func (h *hub) handleListTx(w http.ResponseWriter, r *http.Request, uid int64) {
 	defer rows.Close()
 	for rows.Next() {
 		var it txItem
-		if err := rows.Scan(&it.ID, &it.Type, &it.Amount, &it.Date, &it.Note, &it.Category, &it.Account); err != nil {
+		if err := rows.Scan(&it.ID, &it.Type, &it.Amount, &it.Date, &it.Note, &it.CategoryID, &it.Category, &it.Account); err != nil {
 			continue
 		}
 		items = append(items, it)

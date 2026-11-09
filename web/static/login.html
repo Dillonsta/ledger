@@ -3,25 +3,37 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4c6fff">
 <title>记账本 · 登录</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body class="center-body">
-<div class="login-card">
+<div class="login-wrap">
+  <div class="login-logo">💰</div>
   <h1>记账本</h1>
-  <p class="sub">轻量自托管 · ledger</p>
-  <form id="loginForm">
-    <div class="field"><label>用户名</label><input id="u" autocomplete="username" autofocus></div>
-    <div class="field"><label>密码</label><input id="p" type="password" autocomplete="current-password"></div>
-    <div id="err" class="err hidden"></div>
-    <button class="btn primary block" type="submit">登 录</button>
-  </form>
+  <p class="sub">轻量自托管 · 数据在自己手里</p>
+  <div class="login-card">
+    <form id="loginForm">
+      <div class="field">
+        <label>用户名</label>
+        <input id="u" autocomplete="username" autofocus placeholder="请输入用户名">
+      </div>
+      <div class="field">
+        <label>密码</label>
+        <input id="p" type="password" autocomplete="current-password" placeholder="请输入密码">
+      </div>
+      <div id="err" class="err hidden"></div>
+      <button class="btn primary block" type="submit">登 录</button>
+    </form>
+  </div>
 </div>
 <script>
 document.getElementById('loginForm').onsubmit = async (e) => {
   e.preventDefault();
   const err = document.getElementById('err');
+  const btn = e.target.querySelector('button[type=submit]');
   err.classList.add('hidden');
+  btn.disabled = true;
   try {
     const res = await fetch('/api/login', {
       method: 'POST',
@@ -35,6 +47,7 @@ document.getElementById('loginForm').onsubmit = async (e) => {
   } catch (ex) {
     err.textContent = ex.message;
     err.classList.remove('hidden');
+    btn.disabled = false;
   }
 };
 </script>

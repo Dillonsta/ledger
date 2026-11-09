@@ -21,6 +21,27 @@ function shiftMonth(n) {
   const d = new Date(y, m - 1 + n, 1);
   S.month = d.getFullYear() + '-' + pad(d.getMonth() + 1);
 }
+
+const EMOJI = [
+  ['餐饮', '🍜'], ['交通', '🚌'], ['购物', '🛍️'], ['居住', '🏠'], ['娱乐', '🎮'],
+  ['医疗', '💊'], ['教育', '📚'], ['通讯', '📱'], ['工资', '💰'], ['奖金', '🏆'],
+  ['理财', '📈'], ['兼职', '💼'], ['红包', '🧧'], ['旅行', '✈️'], ['宠物', '🐾'],
+  ['运动', '⚽'], ['美容', '💅'], ['数码', '💻'], ['服饰', '👕'], ['日用', '🧺'],
+];
+function catEmoji(name) {
+  for (const [k, e] of EMOJI) if (name.includes(k)) return e;
+  return '🧾';
+}
+const TINTS = [
+  ['#eef2ff', '#4c6fff'], ['#fff1ef', '#f06e72'], ['#eafaf3', '#21a366'],
+  ['#fff7e8', '#e8930c'], ['#f3eeff', '#8b5cf6'], ['#e8f7fb', '#0e9fc0'],
+  ['#fdeef7', '#d6468c'], ['#f0f5ea', '#5c9c3a'],
+];
+function catTint(id) {
+  const t = TINTS[Math.abs(id) % TINTS.length];
+  return `background:${t[0]}`;
+}
+
 let toastTimer = null;
 function toast(msg) {
   const t = $('#toast');
@@ -44,6 +65,14 @@ async function api(path, method = 'GET', body) {
   try { data = await res.json(); } catch (e) { /* ignore */ }
   if (!res.ok) { toast(data.error || ('请求失败 ' + res.status)); throw new Error(data.error || 'fail'); }
   return data;
+}
+
+function heroStats(income, expense) {
+  const net = income - expense;
+  $('#heroStats').innerHTML = `
+    <div class="col"><i>收入</i><b>+${fmt(income)}</b></div>
+    <div class="col"><i>支出</i><b>-${fmt(expense)}</b></div>
+    <div class="col"><i>结余</i><b class="${net < 0 ? 'net-negative' : ''}">${net < 0 ? '-' : ''}${fmt(Math.abs(net))}</b></div>`;
 }
 
 /* ---------- 初始化 ---------- */
@@ -76,25 +105,34 @@ async function render() {
 
 async function renderList() {
   const d = await api('/api/tx?month=' + S.month + '&size=100');
-  let html = `<div class="summary">
-    <div><i>收入</i><b class="inc">+${fmt(d.sum_income)}</b></div>
-    <div><i>支出</i><b>-${fmt(d.sum_expense)}</b></div>
-    <div><i>结余</i><b>${fmt(d.sum_income - d.sum_expense)}</b></div>
-  </div>`;
+  heroStats(d.sum_income, d.sum_expense);
+  let html = '';
   if (!d.items.length) {
-    html += `<div class="empty">本月还没有记录<br>点右下角 ＋ 记一笔</div>`;
+    html = `<div class="empty"><span class="big">🍃</span>本月还没有记录<br>点右下角 ＋ 记一笔</div>`;
   } else {
-    let lastDate = '';
+    // 先按日期分组算好每日小计，再渲染（分隔条在组的上方）
+    const groups = [];
+    let cur = null;
     for (const it of d.items) {
-      if (it.date !== lastDate) {
-        lastDate = it.date;
-        html += `<div class="date-sep">${it.date}</div>`;
+      if (!cur || cur.date !== it.date) {
+        cur = { date: it.date, items: [], sum: 0 };
+        groups.push(cur);
       }
-      html += `<div class="tx-row" data-id="${it.id}">
-        <span class="tx-cat">${esc(it.category)}</span>
-        <span class="tx-note">${it.note ? esc(it.note) : '<i>无备注</i>'}<em>${esc(it.account)}</em></span>
-        <span class="tx-amt ${it.type === 2 ? 'inc' : 'exp'}">${it.type === 2 ? '+' : '-'}${fmt(it.amount)}</span>
-      </div>`;
+      cur.items.push(it);
+      if (it.type === 1) cur.sum += it.amount;
+    }
+    for (const g of groups) {
+      html += `<div class="date-sep"><span>${dateLabel(g.date)}</span><span>支出 ${fmt(g.sum)}</span></div>`;
+      for (const it of g.items) {
+        html += `<div class="tx-row" data-id="${it.id}">
+          <span class="tx-icon" style="${catTint(it.category_id)}">${catEmoji(it.category)}</span>
+          <span class="tx-mid">
+            <span class="tx-cat">${esc(it.category)}</span>
+            <span class="tx-note">${it.note ? esc(it.note) : '无备注'}<em>· ${esc(it.account)}</em></span>
+          </span>
+          <span class="tx-amt ${it.type === 2 ? 'inc' : ''}">${it.type === 2 ? '+' : '-'}${fmt(it.amount)}</span>
+        </div>`;
+      }
     }
   }
   $('#view').innerHTML = html;
@@ -102,6 +140,14 @@ async function renderList() {
     const item = d.items.find(x => x.id == el.dataset.id);
     if (item) openTxModal(item);
   });
+}
+
+function dateLabel(date) {
+  const [y, m, dd] = date.split('-').map(Number);
+  const now = new Date();
+  if (y === now.getFullYear() && +m === now.getMonth() + 1 && dd === now.getDate()) return '今天';
+  if (y === now.getFullYear() && +m === now.getMonth() + 1 && dd === now.getDate() - 1) return '昨天';
+  return `${m}月${dd}日`;
 }
 
 /* ---------- 记一笔 / 编辑 ---------- */
@@ -119,17 +165,18 @@ function openTxModal(item) {
 
   const m = $('#modal');
   m.innerHTML = `<div class="sheet">
+    <div class="grabber"></div>
     <div class="sheet-head">
-      <button class="ghost" id="mDel" style="color:var(--red);font-size:14px;${isEdit ? '' : 'visibility:hidden'}">删除</button>
+      <button class="ghost" id="mDel" style="color:var(--red);${isEdit ? '' : 'visibility:hidden'}">删除</button>
       <b>${isEdit ? '编辑记录' : '记一笔'}</b>
-      <button class="ghost" id="mClose" style="font-size:14px">关闭</button>
+      <button class="ghost" id="mClose">关闭</button>
     </div>
     <div class="seg">
       <button data-t="1" class="${type === 1 ? 'on' : ''}">支出</button>
       <button data-t="2" class="${type === 2 ? 'on' : ''}">收入</button>
     </div>
     <div class="field"><label>金额（元）</label>
-      <input id="mAmt" type="number" inputmode="decimal" step="0.01" min="0.01"
+      <input id="mAmt" class="amount-input" type="number" inputmode="decimal" step="0.01" min="0.01"
         placeholder="0.00" value="${d.amount ? (d.amount / 100).toFixed(2) : ''}"></div>
     <div class="chips" id="mCats"></div>
     <div class="field"><label>账户</label>
@@ -145,7 +192,7 @@ function openTxModal(item) {
     const cs = S.cats.filter(c => c.type === type);
     if (!catId || !cs.some(c => c.id === catId)) catId = cs.length ? cs[0].id : 0;
     $('#mCats').innerHTML = cs.map(c =>
-      `<button class="chip ${c.id === catId ? 'on' : ''}" data-id="${c.id}">${esc(c.name)}</button>`).join('');
+      `<button class="chip ${c.id === catId ? 'on' : ''}" data-id="${c.id}">${catEmoji(c.name)} ${esc(c.name)}</button>`).join('');
     $$('#mCats .chip').forEach(c => c.onclick = () => {
       catId = +c.dataset.id;
       $$('#mCats .chip').forEach(x => x.classList.toggle('on', x === c));
@@ -191,21 +238,24 @@ function openTxModal(item) {
 
 async function renderReport() {
   const d = await api('/api/report?month=' + S.month);
-  let html = `<div class="summary">
-    <div><i>收入</i><b class="inc">+${fmt(d.income)}</b></div>
-    <div><i>支出</i><b>-${fmt(d.expense)}</b></div>
-    <div><i>结余</i><b>${fmt(d.net)}</b></div>
-  </div>`;
+  heroStats(d.income, d.expense);
 
-  html += `<div class="card"><h4>支出分类</h4>`;
-  if (!d.by_category.length) html += `<div class="empty small">本月无支出</div>`;
-  const maxCat = Math.max(0, ...d.by_category.map(c => c.amount));
-  for (const c of d.by_category) {
-    html += `<div class="hbar">
-      <span class="hbar-label">${esc(c.name)}</span>
-      <div class="hbar-track"><div class="hbar-fill" style="width:${maxCat ? Math.round(c.amount / maxCat * 100) : 0}%"></div></div>
-      <span class="hbar-val">${fmt(c.amount)}</span>
-    </div>`;
+  let html = `<div class="card"><h4>支出分类</h4>`;
+  if (!d.by_category.length) {
+    html += `<div class="empty small">本月无支出</div>`;
+  } else {
+    const maxCat = Math.max(...d.by_category.map(c => c.amount));
+    const total = d.by_category.reduce((s, c) => s + c.amount, 0);
+    html += d.by_category.map(c => {
+      const cat = S.cats.find(x => x.name === c.name);
+      return `<div class="hbar">
+        <span class="hbar-icon" style="${catTint(cat ? cat.id : 0)}">${catEmoji(c.name)}</span>
+        <span class="hbar-mid">
+          <span class="hbar-top"><b>${esc(c.name)}</b><span>${fmt(c.amount)} · ${total ? Math.round(c.amount / total * 100) : 0}%</span></span>
+          <span class="hbar-track"><span class="hbar-fill" style="display:block;width:${maxCat ? Math.max(4, Math.round(c.amount / maxCat * 100)) : 0}%"></span></span>
+        </span>
+      </div>`;
+    }).join('');
   }
   html += `</div>`;
 
@@ -215,30 +265,47 @@ async function renderReport() {
 }
 
 function trendSVG(trend) {
-  const W = 320, H = 140, PL = 10, PR = 10, PT = 14, PB = 22;
+  const W = 320, H = 150, PL = 10, PR = 10, PT = 16, PB = 24;
   const maxV = Math.max(1, ...trend.map(t => Math.max(t.income, t.expense)));
   const n = trend.length;
   const x = i => PL + (W - PL - PR) * (n === 1 ? 0.5 : i / (n - 1));
   const y = v => PT + (H - PT - PB) * (1 - v / maxV);
-  const line = key => trend.map((t, i) => `${x(i).toFixed(1)},${y(t[key]).toFixed(1)}`).join(' ');
+  const pts = key => trend.map((t, i) => [x(i), y(t[key])]);
+  const line = key => pts(key).map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+  const area = key => {
+    const ps = pts(key);
+    const top = ps.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' L');
+    const last = ps[ps.length - 1], first = ps[0];
+    return `M${first[0].toFixed(1)},${(H - PB).toFixed(1)} L${top} L${last[0].toFixed(1)},${(H - PB).toFixed(1)} Z`;
+  };
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">
+    <defs>
+      <linearGradient id="gInc" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#e5484d" stop-opacity=".22"/><stop offset="1" stop-color="#e5484d" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#4c6fff" stop-opacity=".22"/><stop offset="1" stop-color="#4c6fff" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
     <line x1="${PL}" y1="${y(maxV).toFixed(1)}" x2="${W - PR}" y2="${y(maxV).toFixed(1)}" class="grid"/>
     <line x1="${PL}" y1="${y(maxV / 2).toFixed(1)}" x2="${W - PR}" y2="${y(maxV / 2).toFixed(1)}" class="grid"/>
+    <path d="${area('income')}" class="area-inc"/>
+    <path d="${area('expense')}" class="area-exp"/>
     <polyline points="${line('income')}" class="pl-inc"/>
     <polyline points="${line('expense')}" class="pl-exp"/>
-    ${trend.map((t, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(t.income).toFixed(1)}" r="3" class="dot-inc"/>
-      <circle cx="${x(i).toFixed(1)}" cy="${y(t.expense).toFixed(1)}" r="3" class="dot-exp"/>`).join('')}
-    ${trend.map((t, i) => `<text x="${x(i).toFixed(1)}" y="${H - 6}" text-anchor="middle" class="ax">${t.month.slice(5)}月</text>`).join('')}
+    ${trend.map((t, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(t.income).toFixed(1)}" r="3.2" class="dot-inc"/>
+      <circle cx="${x(i).toFixed(1)}" cy="${y(t.expense).toFixed(1)}" r="3.2" class="dot-exp"/>`).join('')}
+    ${trend.map((t, i) => `<text x="${x(i).toFixed(1)}" y="${H - 7}" text-anchor="middle" class="ax">${t.month.slice(5)}月</text>`).join('')}
   </svg>
-  <div class="legend"><span><i class="dot-inc"></i>收入</span><span><i class="dot-exp"></i>支出</span></div>`;
+  <div class="legend"><span><i style="background:var(--red)"></i>收入</span><span><i style="background:#4c6fff"></i>支出</span></div>`;
 }
 
 function dailyHTML(days) {
   if (!days.length) return `<div class="empty small">本月无支出</div>`;
   const maxV = Math.max(...days.map(d => d.expense));
   return `<div class="vbars">` + days.map(d => `
-    <div class="vbar" title="${d.day} 日 支出 ${fmt(d.expense)} 元">
-      <div class="vbar-col" style="height:${Math.max(4, Math.round(d.expense / maxV * 100))}%"></div>
+    <div class="vbar" title="${d.day} 日支出 ${fmt(d.expense)} 元">
+      <div class="vbar-col" style="height:${Math.max(3, Math.round(d.expense / maxV * 100))}%"></div>
       <span>${+d.day}</span>
     </div>`).join('') + `</div>`;
 }
@@ -247,17 +314,30 @@ function dailyHTML(days) {
 
 async function renderBudget() {
   const d = await api('/api/budgets?month=' + S.month);
-  let html = `<div class="card"><h4>${S.month} 预算</h4>
-    <div class="hint">为支出分类设置月度预算，改完自动保存；填 0 或清空表示不设预算。</div>`;
+  const totalBudget = d.items.reduce((s, b) => s + b.budget, 0);
+  const totalSpent = d.items.reduce((s, b) => s + b.spent, 0);
+  $('#heroStats').innerHTML = `
+    <div class="col"><i>总预算</i><b>${totalBudget ? fmt(totalBudget) : '—'}</b></div>
+    <div class="col"><i>已使用</i><b>${fmt(totalSpent)}</b></div>
+    <div class="col"><i>使用率</i><b>${totalBudget ? Math.round(totalSpent / totalBudget * 100) + '%' : '—'}</b></div>`;
+
+  let html = `<div class="card">
+    <h4>${S.month} 分类预算</h4>
+    <div class="hint">为支出分类设置月度预算，输入金额自动保存；填 0 或清空表示不设预算。</div>`;
   for (const b of d.items) {
     const pct = b.budget ? Math.round(b.spent / b.budget * 100) : 0;
-    const cls = !b.budget ? '' : (pct >= 100 ? 'over' : pct >= 80 ? 'warn' : 'ok');
+    const cls = !b.budget ? '' : (pct >= 100 ? 'over' : pct >= 80 ? 'warn' : '');
     html += `<div class="bud-row">
-      <div class="bud-line"><span>${esc(b.name)}</span>
-        <span class="bud-amt">${b.budget ? `已用 ${fmt(b.spent)} / ${fmt(b.budget)}` : `已用 ${fmt(b.spent)}`}</span></div>
-      <div class="bud-bar ${cls}"><div style="width:${b.budget ? Math.min(100, pct) : 0}%"></div></div>
+      <span class="bud-icon" style="${catTint(b.category_id)}">${catEmoji(b.name)}</span>
+      <span class="bud-mid">
+        <span class="bud-line" style="display:flex">
+          <b>${esc(b.name)}</b>
+          <span>${b.budget ? `${fmt(b.spent)} / ${fmt(b.budget)}` : `已用 ${fmt(b.spent)}`}</span>
+        </span>
+        <span class="bud-bar ${cls}" style="display:block"><div style="width:${b.budget ? Math.min(100, pct) : 0}%"></div></span>
+      </span>
       <input class="bud-input" data-cat="${b.category_id}" type="number" inputmode="decimal"
-        step="0.01" min="0" placeholder="预算（元）" value="${b.budget ? (b.budget / 100).toFixed(2) : ''}">
+        step="0.01" min="0" placeholder="预算" value="${b.budget ? (b.budget / 100).toFixed(2) : ''}">
     </div>`;
   }
   html += `</div>`;
@@ -278,7 +358,12 @@ async function renderBudget() {
 
 async function renderSettings() {
   const me = await api('/api/me');
-  let html = `<div class="card"><h4>当前用户：${esc(me.username)}</h4>
+  $('#heroStats').innerHTML = `<div class="col" style="text-align:left"><i>当前用户</i><b>${esc(me.username)}</b></div>`;
+  let html = `<div class="profile">
+    <span class="avatar">${esc(me.username[0] || 'U').toUpperCase()}</span>
+    <span><b>${esc(me.username)}</b><span>数据本地存储 · SQLite</span></span>
+  </div>
+  <div class="card"><h4>修改密码</h4>
     <div class="field"><label>原密码</label><input id="pwOld" type="password" autocomplete="current-password"></div>
     <div class="field"><label>新密码（至少 6 位）</label><input id="pwNew" type="password" autocomplete="new-password"></div>
     <button class="btn primary" id="pwBtn">修改密码</button>
@@ -303,13 +388,14 @@ async function renderSettings() {
   function renderTags() {
     $('#catList').innerHTML = S.cats.map(c =>
       `<span class="tag ${c.used ? 'used' : ''}" data-id="${c.id}" data-kind="cat"
-        title="${c.used ? '已用于 ' + c.used + ' 笔流水，不可删除' : '点击删除'}">${esc(c.name)}<i>${c.type === 1 ? '支出' : '收入'}${c.used ? ' · ' + c.used : ''}</i></span>`).join('');
+        title="${c.used ? '已用于 ' + c.used + ' 笔流水，不可删除' : '点击删除'}">${catEmoji(c.name)} ${esc(c.name)}<i>${c.type === 1 ? '支出' : '收入'}${c.used ? ' · ' + c.used : ''}</i></span>`).join('');
     $('#accList').innerHTML = S.accs.map(a =>
       `<span class="tag ${a.used ? 'used' : ''}" data-id="${a.id}" data-kind="acc"
-        title="${a.used ? '已用于 ' + a.used + ' 笔流水，不可删除' : '点击删除'}">${esc(a.name)}${a.used ? '<i>· ' + a.used + '</i>' : ''}</span>`).join('');
+        title="${a.used ? '已用于 ' + a.used + ' 笔流水，不可删除' : '点击删除'}">💳 ${esc(a.name)}${a.used ? '<i>· ' + a.used + '</i>' : ''}</span>`).join('');
     $$('.tag').forEach(t => t.onclick = async () => {
       if (t.classList.contains('used')) { toast('已被流水使用，不能删除'); return; }
-      if (!confirm('删除「' + t.firstChild.textContent + '」？')) return;
+      const name = t.textContent.replace(/[^\u4e00-\u9fa5A-Za-z0-9].*$/, '').trim();
+      if (!confirm('删除「' + name + '」？')) return;
       const p = t.dataset.kind === 'cat' ? '/api/categories/' + t.dataset.id : '/api/accounts/' + t.dataset.id;
       try {
         await api(p, 'DELETE');

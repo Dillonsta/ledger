@@ -11,3 +11,5 @@ ledger.exe
 ledger-arm64
 ledger-arm64.tar.gz
 *.out
+ledger-arm64*.tar.gz
+.playwright-cli/

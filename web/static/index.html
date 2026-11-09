@@ -3,28 +3,46 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4c6fff">
 <title>记账本</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="month-nav">
-    <button id="prevMonth" class="ghost" aria-label="上个月">‹</button>
-    <span id="curMonth"></span>
-    <button id="nextMonth" class="ghost" aria-label="下个月">›</button>
+<header class="hero">
+  <div class="hero-top">
+    <span class="app-logo">💰</span>
+    <div class="month-nav">
+      <button id="prevMonth" class="nav-btn" aria-label="上个月">‹</button>
+      <span id="curMonth"></span>
+      <button id="nextMonth" class="nav-btn" aria-label="下个月">›</button>
+    </div>
   </div>
-  <span class="app-name">记账本</span>
+  <div id="heroStats" class="hero-stats"></div>
 </header>
 
-<main id="view"><div class="empty">加载中…</div></main>
+<main id="view"></main>
 
-<button id="fab" class="fab" aria-label="记一笔">＋</button>
+<button id="fab" class="fab" aria-label="记一笔">
+  <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+</button>
 
 <nav class="tabbar">
-  <button data-tab="list" class="on">明细</button>
-  <button data-tab="report">图表</button>
-  <button data-tab="budget">预算</button>
-  <button data-tab="settings">设置</button>
+  <button data-tab="list" class="on">
+    <svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="4" cy="6" r="1.6" fill="currentColor"/><circle cx="4" cy="12" r="1.6" fill="currentColor"/><circle cx="4" cy="18" r="1.6" fill="currentColor"/></svg>
+    <span>明细</span>
+  </button>
+  <button data-tab="report">
+    <svg viewBox="0 0 24 24"><path d="M5 20h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="5.5" y="11" width="3.6" height="6" rx="1.4" fill="currentColor"/><rect x="10.2" y="6" width="3.6" height="11" rx="1.4" fill="currentColor"/><rect x="14.9" y="13.5" width="3.6" height="3.5" rx="1.4" fill="currentColor"/></svg>
+    <span>图表</span>
+  </button>
+  <button data-tab="budget">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="3.6" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>
+    <span>预算</span>
+  </button>
+  <button data-tab="settings">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9.5" cy="7" r="2.6" fill="currentColor"/><circle cx="15" cy="17" r="2.6" fill="currentColor"/></svg>
+    <span>设置</span>
+  </button>
 </nav>
 
 <div id="modal" class="modal hidden"></div>
