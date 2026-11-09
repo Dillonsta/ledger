@@ -48,7 +48,74 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.remove('hidden');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.add('hidden'), 2200);
+  toastTimer = setTimeout(() => t.classList.add('hidden'), 2600);
+}
+
+/* ---------- CSV 解析 ---------- */
+
+function parseCSV(text) {
+  text = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const rows = [];
+  let row = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQ = false;
+      } else field += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === ',') { row.push(field); field = ''; }
+    else if (ch === '\n') {
+      row.push(field); field = '';
+      if (row.some(f => f.trim() !== '')) rows.push(row);
+      row = [];
+    } else field += ch;
+  }
+  row.push(field);
+  if (row.some(f => f.trim() !== '')) rows.push(row);
+  return rows;
+}
+
+const CSV_HEADERS = {
+  date: ['date', '日期', '时间', '消费日期', '交易日期'],
+  type: ['type', '类型', '收支', '收支类型'],
+  amount: ['amount', '金额', '数额', '发生金额', '交易金额'],
+  category: ['category', '分类', '类别', '类目'],
+  account: ['account', '账户', '支付方式', '付款方式', '账号'],
+  note: ['note', '备注', '说明', '摘要', '事项', '备注说明'],
+};
+
+function csvToRows(raw) {
+  const table = parseCSV(raw);
+  if (!table.length) return { rows: [], warn: 'CSV 内容为空' };
+  const findCols = (header) => {
+    const map = {};
+    for (const key of Object.keys(CSV_HEADERS)) {
+      map[key] = header.findIndex(h => CSV_HEADERS[key].includes(h.trim().toLowerCase()));
+    }
+    return map;
+  };
+  const first = table[0].map(h => h.trim().toLowerCase());
+  let cols, start = 1;
+  if (first.includes('date') || first.includes('日期') || first.includes('时间')) {
+    cols = findCols(table[0]);
+    if (cols.date < 0 || cols.amount < 0 || cols.type < 0) return { rows: [], warn: '表头缺少 日期/类型/金额 列' };
+  } else {
+    // 无表头：按 日期,类型,金额,分类,账户,备注 顺序
+    cols = { date: 0, type: 1, amount: 2, category: 3, account: 4, note: 5 };
+    start = 0;
+  }
+  const rows = [];
+  for (let i = start; i < table.length; i++) {
+    const t = table[i];
+    const get = k => cols[k] >= 0 && cols[k] < t.length ? t[cols[k]] : '';
+    rows.push({
+      date: get('date'), type: get('type'), amount: get('amount'),
+      category: get('category'), account: get('account'), note: get('note')
+    });
+  }
+  return { rows };
 }
 
 async function api(path, method = 'GET', body) {
@@ -382,6 +449,15 @@ async function renderSettings() {
       <button class="btn" id="accAdd">添加</button>
     </div>
     <div id="accList"></div>
+  </div>
+  <div class="card"><h4>CSV 导入</h4>
+    <div class="hint">列：日期,类型,金额,分类,账户,备注（有表头自动识别；类型填 支出/收入；金额单位元；分类账户不存在会自动创建；重复行自动跳过）</div>
+    <div class="addline">
+      <input id="csvFile" type="file" accept=".csv,.txt" style="flex:1;min-width:0;font-size:12px">
+    </div>
+    <div class="field"><textarea id="csvText" rows="4" style="width:100%;padding:10px 12px;font-size:12.5px;border:1.5px solid var(--line);border-radius:11px;background:#fafbfe;font-family:inherit" placeholder="或直接粘贴 CSV 文本：&#10;日期,类型,金额,分类,账户,备注&#10;2026-11-09,支出,25.60,餐饮,微信,午餐"></textarea></div>
+    <div id="csvPreview" class="hint"></div>
+    <button class="btn primary" id="csvImport" disabled>预览后导入</button>
   </div>`;
   $('#view').innerHTML = html;
 
@@ -430,6 +506,52 @@ async function renderSettings() {
       toast('密码已修改');
       $('#pwOld').value = ''; $('#pwNew').value = '';
     } catch (e) { /* toast 已提示 */ }
+  };
+
+  // ---- CSV 导入 ----
+  let csvRows = null;
+  const csvPreview = $('#csvPreview'), csvBtn = $('#csvImport');
+
+  function loadCsvText(text) {
+    const { rows, warn } = csvToRows(text);
+    csvRows = rows;
+    if (warn) { csvPreview.textContent = warn; csvBtn.disabled = true; csvRows = null; return; }
+    if (!rows.length) { csvPreview.textContent = '没有解析到数据行'; csvBtn.disabled = true; csvRows = null; return; }
+    csvPreview.textContent = `已解析 ${rows.length} 行（导入时如有错误将整批回滚并提示行号）`;
+    csvBtn.disabled = false;
+  }
+
+  $('#csvFile').onchange = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => { $('#csvText').value = reader.result; loadCsvText(reader.result); };
+    reader.readAsText(f, 'utf-8');
+  };
+  $('#csvText').oninput = e => {
+    if (!e.target.value.trim()) { csvRows = null; csvPreview.textContent = ''; csvBtn.disabled = true; return; }
+    loadCsvText(e.target.value);
+  };
+
+  csvBtn.onclick = async () => {
+    if (!csvRows || !csvRows.length) { toast('请先选择文件或粘贴 CSV'); return; }
+    csvBtn.disabled = true;
+    try {
+      const res = await api('/api/import', 'POST', { rows: csvRows });
+      if (res.failed > 0) {
+        const detail = res.errors.slice(0, 5).map(e => `第${e.line}行：${e.error}`).join('\n');
+        alert(`导入失败（整批已回滚）\n${detail}${res.errors.length > 5 ? '\n…' : ''}`);
+        csvPreview.textContent = `${res.failed} 行有误，请修正后重试`;
+      } else {
+        toast(`导入成功：新增 ${res.imported} 笔，跳过重复 ${res.skipped} 笔`);
+        $('#csvText').value = '';
+        $('#csvFile').value = '';
+        csvPreview.textContent = '';
+        csvRows = null;
+        await loadMeta();
+      }
+    } catch (e) { /* toast 已提示 */ }
+    csvBtn.disabled = !csvRows;
   };
 }
 

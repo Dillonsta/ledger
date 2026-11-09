@@ -55,6 +55,7 @@ func main() {
 	mux.HandleFunc("PUT /api/budgets", h.requireAuth(h.handlePutBudget))
 
 	mux.HandleFunc("GET /api/report", h.requireAuth(h.handleReport))
+	mux.HandleFunc("POST /api/import", h.requireAuth(h.handleImport))
 
 	static, err := fs.Sub(webFS, "web/static")
 	if err != nil {

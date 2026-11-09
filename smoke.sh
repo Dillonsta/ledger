@@ -104,6 +104,31 @@ check "login-served-200" 200 "$code"
 code=$(curl -s -o /dev/null -w '%{http_code}' $BASE/app.js)
 check "appjs-served-200" 200 "$code"
 
+# 18. CSV import (JSON rows): creates new category+account, normalizes date
+imp=$(curl -s -X POST $BASE/api/import -H "$AUTH" -H 'Content-Type: application/json' -d '{"rows":[
+  {"date":"2026/11/8","type":"支出","amount":"25.60","category":"外卖","account":"饭卡","note":"import-a"},
+  {"date":"2026-11-08","type":"收入","amount":"100","category":"红包","account":"现金","note":"import-b"},
+  {"date":"2026.11.08","type":"支出","amount":"¥9.90","category":"交通","account":"微信","note":"import-c"}
+]}')
+echo "$imp" | grep -q '"imported":3' && check "import-3-rows" ok ok || check "import-3-rows" ok "$imp"
+
+# 19. re-import same rows -> all skipped (idempotent)
+imp2=$(curl -s -X POST $BASE/api/import -H "$AUTH" -H 'Content-Type: application/json' -d '{"rows":[
+  {"date":"2026-11-08","type":"支出","amount":"25.60","category":"外卖","account":"饭卡","note":"import-a"},
+  {"date":"2026-11-08","type":"收入","amount":"100","category":"红包","account":"现金","note":"import-b"},
+  {"date":"2026-11-08","type":"支出","amount":"9.90","category":"交通","account":"微信","note":"import-c"}
+]}')
+echo "$imp2" | grep -q '"imported":0,"skipped":3' && check "import-idempotent" ok ok || check "import-idempotent" ok "$imp2"
+
+# 20. import with a bad row -> whole batch rolled back
+code_bad=$(curl -s -X POST $BASE/api/import -H "$AUTH" -H 'Content-Type: application/json' -d '{"rows":[
+  {"date":"2026-11-07","type":"支出","amount":"10","category":"餐饮","account":"现金","note":"rollback-good"},
+  {"date":"bad-date","type":"支出","amount":"1","category":"餐饮","account":"现金","note":"rollback-bad"}
+]}')
+echo "$code_bad" | grep -q '"failed":1' && check "import-rollback" ok ok || check "import-rollback" ok "$code_bad"
+list_rollback=$(curl -s -H "$AUTH" "$BASE/api/tx?q=rollback-good")
+echo "$list_rollback" | grep -q '"total":0' && check "import-rollback-no-residue" ok ok || check "import-rollback-no-residue" ok "$list_rollback"
+
 echo "-----"
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" = "0" ]

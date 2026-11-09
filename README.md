@@ -85,9 +85,34 @@ sh ./smoke.sh    # 25 项断言：登录/CRUD/预算/报表/静态页/权限
 - `ledger.exe`（windows/amd64，本地测试用）、`ledger-arm64`（linux/arm64，目标设备用）：纯静态二进制，无 CGO
 - 前端通过 `go:embed` 打进二进制，运行时无外部文件依赖
 
+## CSV 导入
+
+设置页「CSV 导入」卡片：选择文件或粘贴文本 → 预览 → 导入。也支持 API 供 agent 自动化：
+
+```sh
+TOKEN=$(curl -s -X POST http://<设备IP>:8300/api/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"你的密码"}' | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+
+curl -X POST http://<设备IP>:8300/api/import \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"rows":[
+    {"date":"2026-11-09","type":"支出","amount":"25.60","category":"餐饮","account":"微信","note":"午餐"},
+    {"date":"2026-11-09","type":"收入","amount":"5000","category":"工资","account":"银行卡","note":"工资"}
+  ]}'
+```
+
+规则：
+- 列：`日期,类型,金额,分类,账户,备注`（前端有表头自动识别；API 直接收结构化 rows）
+- 日期支持 `2026-11-09` / `2026/11/9` / `2026.11.09`；类型 `支出/收入`；金额单位元（`¥`、千分位逗号均可）
+- 分类/账户不存在会自动创建；备注选填
+- **幂等**：日期+类型+金额+分类+账户+备注完全相同的行视为重复，自动跳过 → agent 重试不会重复记账
+- **全有或全无**：任何一行非法，整批回滚，返回 `{line, error}` 行级错误列表
+- 单次上限 1000 行
+
 ## 路线图（按需）
 
 - [ ] 用户注册接口（表结构已就绪）
-- [ ] CSV 导入导出
+- [ ] CSV 导出
 - [ ] PWA（添加到主屏）
 - [ ] 多账户余额视图
