@@ -1,6 +1,6 @@
 # ledger
 
-跑在 EdgePi E87N（ARM64）上的轻量自托管记账本：**Go 单二进制 + SQLite + 内嵌 Web UI**，Docker 镜像 ~20MB，常驻内存 ~20MB。
+跑在ARM64上的轻量自托管记账本：**Go 单二进制 + SQLite + 内嵌 Web UI**，Docker 镜像 ~20MB，常驻内存 ~20MB。
 
 ## 功能
 
