@@ -1,6 +1,6 @@
 # ledger
 
-跑在ARM64上的轻量自托管记账本：**Go 单二进制 + SQLite + 内嵌 Web UI**，Docker 镜像 ~20MB，常驻内存 ~20MB。
+跑在ARM64上的轻量自托管记账本：**Go 单二进制 + SQLite + 内嵌 Web UI**，Docker 镜像 ~10MB，常驻内存 ~20MB。
 
 ## 功能
 
@@ -12,13 +12,36 @@
 - 设置：改密码、自定义分类/账户（有流水的禁止删除）
 - 多人预留：所有表都按 `user_id` 隔离，后续加注册接口即可
 
-## 快速部署（E87N / 任意 arm64 设备）
+## 快速部署（任意 arm64 设备）
 
 ```sh
 docker compose up -d --build
 ```
 
 然后浏览器访问 `http://<设备IP>:8300`。
+
+### OpenWrt 系路由器的注意事项
+
+1. **用 host 网络模式**。OpenWrt 固件的防火墙（DOCKER-MAN 链）会拦掉 LAN 到 bridge 网络容器的新连接，且 dockerd 重启后 DOCKER 链的端口规则可能不重建。改成：
+   ```yaml
+   services:
+     ledger:
+       image: ledger:1.0
+       network_mode: host   # 直接监听宿主机 8300，绕开全部 NAT/转发链
+       ...
+   ```
+2. **设备无外网时**（拉不动 Docker Hub / 克隆不了 GitHub），本机构建镜像再传过去：
+   ```sh
+   # 本机（Windows/macOS/Linux 均可）
+   docker buildx build --platform linux/arm64 -t ledger:1.0 --load .
+   docker save ledger:1.0 | gzip > ledger-arm64.tar.gz
+   scp -O ledger-arm64.tar.gz root@<设备IP>:/mnt/nvme0n1p2/ledger/
+
+   # 设备上
+   docker load -i ledger-arm64.tar.gz
+   docker compose up -d
+   ```
+3. scratch 镜像以 UID 65534（nobody）运行，数据目录需要先 `chown -R 65534:65534 <数据目录>`。
 
 - 首次启动自动创建用户（环境变量 `LEDGER_ADMIN_USER` / `LEDGER_ADMIN_PASS`，默认 `admin` / `admin123`），并预置默认分类（餐饮/交通/购物…）和账户（现金/微信/支付宝/银行卡）
 - **部署前改掉 `docker-compose.yml` 里的默认密码**
@@ -59,7 +82,7 @@ sh ./smoke.sh    # 25 项断言：登录/CRUD/预算/报表/静态页/权限
 
 ## 构建产物
 
-- `ledger.exe`（windows/amd64，本地测试用）、`ledger-arm64`（linux/arm64，E87N 用）：纯静态二进制，无 CGO
+- `ledger.exe`（windows/amd64，本地测试用）、`ledger-arm64`（linux/arm64，目标设备用）：纯静态二进制，无 CGO
 - 前端通过 `go:embed` 打进二进制，运行时无外部文件依赖
 
 ## 路线图（按需）

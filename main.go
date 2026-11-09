@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"time"
+	_ "time/tzdata" // 内嵌时区表，scratch 镜像里 TZ 也能生效
 
 	_ "modernc.org/sqlite"
 )

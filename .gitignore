@@ -9,4 +9,5 @@ smoke-server.log
 # 编译产物
 ledger.exe
 ledger-arm64
+ledger-arm64.tar.gz
 *.out
